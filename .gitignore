@@ -1,19 +1,25 @@
-pom.xml
-pom.xml.asc
-*.jar
-*.class
-/lib/
-/classes/
-/target/
-/checkouts/
-.lein-deps-sum
-.lein-repl-history
-.lein-plugins/
-.lein-failures
+*.*~
+
+## Clojure
 .nrepl-port
-.nightlight.edn
-*.iml
-/.idea
-.nrepl-history
-classnet.zip
-iris-model
+.cpcache/
+.rebl/
+
+## Leiningen
+target/
+.lein-failures
+# only for Leiningen projects, remove for Maven projects
+**/pom.xml
+
+## VS Code Calva
+.calva
+.clj-kondo
+.cpcache
+.lsp
+
+## Eclipse
+.classpath
+.project
+.settings/
+bin/
+hs_err_pid*.log

@@ -46,7 +46,10 @@
            [org.deeplearning4j.nn.conf.layers.variational VariationalAutoencoder VariationalAutoencoder$Builder]
            [org.nd4j.linalg.learning.config Nesterovs Adam RmsProp Sgd AdaDelta AdaGrad AdaMax Nadam NoOp]))
 
-(defn regression-csv-iterator [filename batch-size label-index]
+(defn regression-csv-iterator
+  "Builds a dataset iterator for regression based on the given csv file, batch size
+   and the 0 based index for the label."
+  [filename batch-size label-index]
   (let [path (-> (ClassPathResource. filename)
                  (.getFile))
         rr (CSVRecordReader.)]
@@ -55,17 +58,21 @@
       (doto (RecordReaderDataSetIterator$Builder. rr batch-size)
         (.regression label-index)))))
 
-(defn classification-csv-iterator [filename batch-size label-index num-possible-labels]
+(defn classification-csv-iterator
+  "Builds a dataset iterator for classification based on the given csv file, batch size,
+   the 0 based index for the label and the number of possible labels."
+  [filename batch-size label-index num-possible-labels]
   (let [path (-> (ClassPathResource. filename)
                  (.getFile))
         rr (CSVRecordReader.)]
     (.initialize rr (FileSplit. path))
     (.build
-      (doto (RecordReaderDataSetIterator$Builder. rr batch-size)
-        (.classification label-index num-possible-labels)))))
+     (doto (RecordReaderDataSetIterator$Builder. rr batch-size)
+       (.classification label-index num-possible-labels)))))
 
 (defn sequence-regression-csv-iterator 
-  "Use for Recurrent Neural Nets"
+  "Builds a dataset iterator for regression based on the given csv file, batch size and
+   the 0 based index for the label. Use for Recurrent Neural Nets."
   [filename batch-size label-index]
   (let [path (-> (ClassPathResource. filename)
               (.getFile))
@@ -74,7 +81,8 @@
     (SequenceRecordReaderDataSetIterator. rr batch-size -1 label-index true)))
 
 (defn sequence-classification-csv-iterator
-  "Use for Recurrent Neural Nets"
+  "Builds a dataset iterator for classification based on the given csv file, batch size,
+   the 0 based index for the label and the number of possible labels. Use for Recurrent Neural Nets."
   [filename batch-size label-index num-possible-labels]
   (let [path (-> (ClassPathResource. filename)
                  (.getFile))
@@ -82,7 +90,8 @@
     (.initialize rr (FileSplit. path))
     (SequenceRecordReaderDataSetIterator. rr batch-size num-possible-labels label-index)))
 
-(defn classification-dir-labeled-image-iterator 
+(defn classification-dir-labeled-image-iterator
+  "Buids a data iterator for classification from the given directory of images."
   [directory height width channels batch-size num-possible-labels rnd]
   (let [dir (File. directory)
         file-split (FileSplit. dir NativeImageLoader/ALLOWED_FORMATS (Random. rnd))         
@@ -94,21 +103,26 @@
         _ (.setPreProcessor data-iterator data-normalizer)]
     data-iterator))
 
-(defn translate-to-java [key]
+(defn translate-to-java
+  "Translates a kebab cased clojure name to a camel cased java name."
+  [key]
   (let [tokens (clojure.string/split (name key) #"-")
         t0 (first tokens)]
     (str t0 (apply str (mapv clojure.string/capitalize (rest tokens))))))
 
-(defn get-layers-index [ks]
+(defn get-layers-index
+  "Returns the index of the :layers key."
+  [ks]
   (let [index (.indexOf ks :layers)]
     (if (not= -1 index)
       (if (= index 0) index
-        (if (= index 1) 0
-          (if (= index 2) 1
-            (/ index 2))))
+          (if (= index 1) 0
+              (if (= index 2) 1
+                  (/ index 2))))
       (throw (Exception. ":layers key not found in config")))))
 
-(defn init-config-parse [edn-config]
+(defn init-config-parse
+  [edn-config]
   (let [layers-index (get-layers-index edn-config)
         split-config (split-at layers-index (partition 2 edn-config))]
     split-config))
@@ -134,13 +148,15 @@
    :workspace-enabled        (WorkspaceMode/ENABLED)
    })
 
-(defn get-option [arg]
+(defn get-option
+  [arg]
   (let [option (get options arg)]
     (if (nil? option)
       (throw (Exception. (str arg " is not a supported justu.ai option")))
       option)))
 
-(defn parse-arg [arg]
+(defn parse-arg
+  [arg]
   (if (keyword? arg) (get-option arg) arg))
 
 ;;from https://en.wikibooks.org/wiki/Clojure_Programming/Examples#Invoking_Java_method_through_method_name_as_a_String
@@ -150,7 +166,8 @@
                 method-str 
                 (to-array args)))
 
-(defn parse-element [el]
+(defn parse-element
+  [el]
   (let [method (translate-to-java (first el))
         arg (parse-arg (second el))]
     (if (= clojure.lang.PersistentVector (class arg))
@@ -186,26 +203,30 @@
                                     (SubsamplingLayer$Builder. (int-array kernel-size) (int-array stride))))
    :local-response-normalization (fn [] (LocalResponseNormalization$Builder.))})
 
-(defn prepare-layer-config [layer-config]
+(defn prepare-layer-config
+  [layer-config]
   (->> (partition 2 layer-config)
        (map parse-element)
        (apply comp)))
 
-(defn normal-layer [i layer-builder config]
+(defn normal-layer
+  [i layer-builder config]
   (let [config-methods (prepare-layer-config config)]
     (fn [net]
       (.layer net i (-> (layer-builder)
                         config-methods
                         .build)))))
 
-(defn special-layer [i layer-builder config]
+(defn special-layer
+  [i layer-builder config]
   (let [config-methods (prepare-layer-config (last config))]
     (fn [net]
       (.layer net i (-> (apply layer-builder (map parse-arg (drop-last config)))
                         config-methods
                         .build)))))
 
-(defn parse-layer [i layer]
+(defn parse-layer
+  [i layer]
   (let [layer-type (first layer)
         layer-config (rest layer)
         layer-builder (get layer-builders layer-type)]
@@ -213,12 +234,14 @@
       (normal-layer i layer-builder (first layer-config))
       (special-layer i layer-builder layer-config))))
 
-(defn parse-body [body]
+(defn parse-body
+  [body]
   (doall (map-indexed (fn [i layer] (parse-layer i layer)) body)))
 
 ;;Order of header-body-footer matters
 ;;builds a transducer of instance methods to call on the neural net object
-(defn branch-config [parsed-config]
+(defn branch-config
+  [parsed-config]
   (let [header (first parsed-config)
         body-footer (split-at 1 (second parsed-config))
         body (second (ffirst body-footer))
@@ -234,7 +257,8 @@
           footer-transducer
           .build))))
           
-(defn network [edn-config]
+(defn network
+  [edn-config]
   (let [network-transducer (-> edn-config
                                init-config-parse;;split config at layers index
                                branch-config)]
@@ -250,44 +274,59 @@
      net)))
 
 ;;set true for online learning
-(defn save-model 
+(defn save-model
+  "Saves the network as a model with the given filename. Set ready-for-more to true for online learning." 
   ([net filename]
    (save-model net filename false))
   ([net filename ready-for-more]
    (ModelSerializer/writeModel net (java.io.File. filename) ready-for-more)))
 
-(defn load-model [filename]
+(defn load-model
+  "Loads the model with the given filename."
+  [filename]
    (ModelSerializer/restoreMultiLayerNetwork filename))
 
-(defn train-net! [net epochs dataset-iterator]
+(defn train-net!
+  "Trains the net for the number of epochs on the given dataset iterator."
+  [net epochs dataset-iterator]
   (doseq [n (range 0 epochs)]
     (.reset dataset-iterator)
     (.fit net dataset-iterator))
   net)
 
 (defn output
+  ""
   ([net data] (.output net data false))
   ([net data train?] (.output net data train?)))
 
-(defn evaluate [net dataset-iterator]
+(defn evaluate
+  "Returns the statistics for the evaluation of the classification model for the dataset iterator."
+  [net dataset-iterator]
   (.stats (.evaluate net dataset-iterator)))
 
-(defn evaluate-regression [net dataset-iterator]
+(defn evaluate-regression
+  "Returns the statistics for the evaluation of the regression model for the dataset iterator."
+  [net dataset-iterator]
   (.stats (.evaluateRegression net dataset-iterator)))
 
-(defn input-type-convolutional-flat [arg1 arg2 arg3]
+(defn input-type-convolutional-flat
+  [arg1 arg2 arg3]
   (InputType/convolutionalFlat arg1 arg2 arg3))
 
-(defn input-type-convolutional [arg1 arg2 arg3]
+(defn input-type-convolutional
+  [arg1 arg2 arg3]
   (InputType/convolutional arg1 arg2 arg3))
 
-(defn normal-distribution [min max]
+(defn normal-distribution
+  [min max]
   (NormalDistribution. min max))
 
-(defn guassian-distribution [min max]
+(defn guassian-distribution
+  [min max]
   (GaussianDistribution. min max))
 
-(defmulti build-updater  (fn [updater-key opts] updater-key))
+(defmulti build-updater
+  (fn [updater-key opts] updater-key))
 
 (defmethod build-updater :rms-prop
   [_ {:keys [learning-rate learning-rate-schedule epsilon]}]
@@ -366,7 +405,8 @@
   {:iteration (ScheduleType/ITERATION)
    :epoch (ScheduleType/EPOCH)})
 
-(defmulti build-schedule-internal (fn [schedule-key opts] schedule-key))
+(defmulti build-schedule-internal
+  (fn [schedule-key opts] schedule-key))
 
 (defmethod build-schedule-internal :exponential
   [_ {:keys [schedule-type initial-value gamma]}]
